@@ -1,0 +1,170 @@
+---
+title: "Homework 4"
+author: "Lauren VanValkenburg"
+date: "February 21, 2018"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(knitr)
+library(tibble)
+```
+
+## 10.5 Exercises 
+
+### 1. How can you tell if an object is a tibble?
+
+```{r}
+mtcars
+class(mtcars)
+class(as_tibble(mtcars))
+```
+
+### 2. Compare and contrast the following operations on a data.frame and equivalent tibble. What is different? Why might the default data frame behaviors cause you frustration?
+
+```{r}
+df <- data.frame(abc = 1, xyz = "a")
+df$x
+df[, "xyz"]
+df[, c("abc", "xyz")]
+
+tbl <- as_tibble(df)
+tbl$x
+tbl[, "xyz"]
+tbl[, c("abc", "xyz")]
+```
+
+Using the $ with the data frame completes the column, but with a tibble it produces a warning message. With data frames the [ returns what we have assigned to the object, so 'a'. With the tibble, the [ returns the full object 'xyz'. 
+
+### 3. If you have the name of a variable stored in an object, e.g. var <- "mpg", how can you extract the reference variable from a tibble?
+
+From a tibble, you have to use the double bracket because the $ looks for a column named var. 
+
+### 4. Practice referring to non-syntactic names in the following data frame by:
+
+1. Extracting the variable called 1.
+```{r}
+annoying <- tibble(
+  `1` = 1:10,
+  `2` = `1` * 2 + rnorm(length(`1`))
+)
+
+annoying[["1"]]
+```
+
+2. Plotting a scatterplot of 1 vs 2.
+```{r}
+ggplot(annoying, aes(x = `1`, y = `2`)) + geom_point()
+```
+
+3. Creating a new column called 3 which is 2 divided by 1.
+```{r}
+annoying[["3"]] <- annoying[["2"]] / annoying[["1"]]
+annoying[["3"]]
+```
+
+4. Renaming the columns to one, two and three.
+```{r}
+annoying <- rename(annoying, one = `1`, two = `2`, three = `3`)
+glimpse(annoying)
+```
+
+### 5. What does tibble::enframe() do? When might you use it?
+
+Tibble::enframe() converts named vectors to a data frame with names and values. You could use it when you want to convert a tibble to data to make a graph. 
+
+### 6. What option controls how many additional column names are printed at the footer of a tibble?
+
+The print command for tibbles is print.tbl_df and the option n_extra determines the number of columns to print. 
+
+******
+
+## 12.6.1 Exercises 
+
+```{r}
+#code needed from chapter
+who %>%
+  gather(code, value, new_sp_m014:newrel_f65, na.rm = TRUE) %>% 
+  mutate(code = stringr::str_replace(code, "newrel", "new_rel")) %>%
+  separate(code, c("new", "var", "sexage")) %>% 
+  select(-new, -iso2, -iso3) %>% 
+  separate(sexage, c("sex", "age"), sep = 1)
+who1 <- who %>%
+  gather(new_sp_m014:newrel_f65, key = "key", value = "cases", na.rm = TRUE)
+glimpse(who1)
+who2 <- who1 %>%
+  mutate(key = stringr::str_replace(key, "newrel", "new_rel"))
+who3 <- who2 %>%
+  separate(key, c("new", "type", "sexage"), sep = "_")
+who3
+who3 %>%
+  count(new)
+who4 <- who3 %>%
+  select(-new, -iso2, -iso3)
+who5 <- who4 %>%
+  separate(sexage, c("sex", "age"), sep = 1)
+who5
+```
+
+### 1. In this case study I set na.rm = TRUE just to make it easier to check that we had the correct values. Is this reasonable? Think about how missing values are represented in this dataset. Are there implicit missing values? What’s the difference between an NA and zero?
+
+This may not be reasonable because there are zeros in the data. 
+
+```{r}
+who1 %>%
+  filter(cases == 0) %>%
+  nrow()
+```
+
+It appears that the if the data is missing it is either because there is some or all missing data. So, in this case there is no difference between NA and zero. 
+
+```{r}
+gather(who, new_sp_m014:newrel_f65, key = "key", value = "cases") %>%
+  group_by(country, year)  %>%
+  mutate(missing = is.na(cases)) %>%
+  select(country, year, missing) %>%
+  distinct() %>%
+  group_by(country, year) %>%
+  filter(n() > 1)
+```
+
+### 2. What happens if you neglect the mutate() step? (mutate(key = stringr::str_replace(key, "newrel", "new_rel")))
+
+If you neglect the mutate() step separate gives us the warning of missing pieces filled with "NA". 
+
+```{r}
+who3a <- who1 %>%
+  separate(key, c("new", "type", "sexage"), sep = "_")
+
+filter(who3a, new == "newrel") %>% head()
+```
+
+### 3. I claimed that iso2 and iso3 were redundant with country. Confirm this claim.
+
+```{r}
+select(who3, country, iso2, iso3) %>%
+  distinct() %>%
+  group_by(country) %>%
+  filter(n() > 1)
+```
+
+### 4. For each country, year, and sex compute the total number of cases of TB. Make an informative visualization of the data.
+
+```{r}
+who5 %>%
+  group_by(country, year, sex) %>%
+  filter(year > 1995) %>%
+  summarise(cases = sum(cases)) %>%
+  unite(country_sex, country, sex, remove = FALSE) %>%
+  ggplot(aes(x = year, y = cases, group = country_sex, colour = sex)) +
+  geom_line()
+```
+
+It appears that there are too many countries being analyzed by this graph. The bottom is hard to read. We should focus on the countried with the biggest changes. 
